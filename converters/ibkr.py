@@ -1,5 +1,6 @@
 import csv
 import os
+import re
 from datetime import date
 
 import pandas as pd
@@ -84,7 +85,10 @@ class CSVConverter:
                 self.row = row
                 self._process_trades()
                 self._process_forex()
+                self._process_deposits_withdrawals()
                 self._process_dividends()
+                self._process_withholding_tax()
+                self._process_interest()
                 self._process_instrument_information()
 
             for df in [
@@ -136,7 +140,16 @@ class CSVConverter:
     def _process_forex(self):
         raise NotImplementedError()
 
+    def _process_deposits_withdrawals(self):
+        raise NotImplementedError()
+
     def _process_dividends(self):
+        raise NotImplementedError()
+
+    def _process_withholding_tax(self):
+        raise NotImplementedError()
+
+    def _process_interest(self):
         raise NotImplementedError()
 
     def _process_instrument_information(self):
@@ -148,6 +161,8 @@ class IbkrConverter(CSVConverter):
         super().__init__(args)
 
         self._skip_dividend_section = False
+        self._skip_dw_section = False
+        self._withholding_tax = {}
 
     def _process_trades(self):
         if self.row[0] != "Trades" or self.row[3] == "Forex":
@@ -241,9 +256,7 @@ class IbkrConverter(CSVConverter):
         return False
 
     def _process_forex_row(self):
-        if (
-            self.row[2] != "Order" or self.row[4] == "EUR"
-        ):  # pyFIFOtax spreadsheet supports only conversion into EUR
+        if self.row[2] != "Order":
             return False
 
         self.df_forex.loc[len(self.df_forex.index)] = [
@@ -252,8 +265,59 @@ class IbkrConverter(CSVConverter):
             abs(
                 self._parse_number(self.row[12]) * self._parse_number(self.row[9])
             ),  # Comm in EUR * T. Price
-            self.row[5].replace(self.row[4], "").replace(".", ""),  # Symbol
-            self.row[4],  # Currency
+            self.row[5].replace(self.row[4], "").replace(".", ""),  # Symbol - Source currency
+            self.row[4],  # Currency - Target currency
+        ]
+
+        return True
+
+    def _process_deposits_withdrawals(self):
+        if self.row[0] != "Deposits & Withdrawals":
+            return
+
+        if self._check_dw_header():
+            # Skip after header processing
+            return
+
+        if self._process_dw_row():
+            self.processed_forex += 1
+
+    def _check_dw_header(self):
+        if self.row[1] == "Header":
+            wrong_headers = expected_headers = [
+                "Deposits & Withdrawals", "Header", "Currency", "Settle Date", "Description", "Amount"
+            ]
+
+            if self.row == wrong_headers:
+                # There are two "Deposits & Withdrawals" sections in the CSV file, duplicating the same information. Skip the first
+                self._skip_dw_section = True
+
+                return True
+
+            expected_headers += ["Code"]
+
+            if self.row != expected_headers:
+                self._wrong_header("Deposits & Withdrawals")
+
+            return True
+
+        return False
+
+    def _process_dw_row(self):
+        if self._skip_dw_section or self.row[2].startswith("Total"):
+            return False
+
+        amount = self._parse_number(self.row[5])  # Amount
+        if amount <= 0:
+            # Don't care about disbursements
+            return False
+
+        self.df_forex.loc[len(self.df_forex.index)] = [
+            date.fromisoformat(self.row[3]),  # Settle Date
+            amount,  # Proceeds
+            0,  # Fees
+            self.row[2],  # Symbol
+            self.row[2],  # Symbol
         ]
 
         return True
@@ -306,6 +370,71 @@ class IbkrConverter(CSVConverter):
             0,  # Tax withholding
             self.row[2],  # Currency
             symbol,
+        ]
+
+        return True
+
+    def _process_withholding_tax(self):
+        if self.row[0] != "Withholding Tax":
+            return
+
+        if self._check_withholding_tax_header():
+            # Skip after header processing
+            return
+
+        self._process_withholding_tax_row()
+
+    def _check_withholding_tax_header(self):
+        if self.row[1] == "Header":
+            expected_headers = ["Withholding Tax", "Header", "Currency", "Date", "Description", "Amount", "Code"]
+            if not self.row == expected_headers:
+                self._wrong_header("Withholding Tax")
+
+            return True
+
+        return False
+
+    def _process_withholding_tax_row(self):
+        if self.row[2].startswith("Total"):
+            return False
+
+        # Withholding @ 20% on Credit Interest for May-2023 -> ZWD Credit Interest for May-2023
+        description = re.sub(r"Withholding @ \d+% on", self.row[2], self.row[4])
+        amount = -self._parse_number(self.row[5])  # Amount
+        self._withholding_tax[description] = amount
+
+    def _process_interest(self):
+        if self.row[0] != "Interest":
+            return
+
+        if self._check_interest_header():
+            # Skip after header processing
+            return
+
+        if self._process_interest_row():
+            self.processed_dividends += 1
+
+    def _check_interest_header(self):
+        if self.row[1] == "Header":
+            expected_headers = ["Interest", "Header", "Currency", "Date", "Description", "Amount"]
+            if not self.row == expected_headers:
+                self._wrong_header("Interest")
+
+            return True
+
+        return False
+
+    def _process_interest_row(self):
+        if self.row[2].startswith("Total"):
+            return False
+
+        self.df_dividends.loc[len(self.df_dividends.index)] = [
+            date.fromisoformat(self.row[3]),  # Date
+            self.row[2],  # Currency
+            self._parse_number(self.row[5]),  # Amount
+            self._withholding_tax[self.row[4]],  # Tax withholding
+            self.row[2],  # Currency
+            f"{self.row[2]} interest",  # Product
         ]
 
         return True
