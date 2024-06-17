@@ -72,7 +72,6 @@ class CSVConverter:
         )
 
         self.row = ""
-        self.skip_dividend_section = False
         self.processed_trades = 0
         self.processed_dividends = 0
         self.processed_forex = 0
@@ -121,8 +120,15 @@ class CSVConverter:
         worksheet.autofit()  # Adjust column widths to their maximum lengths
 
     @staticmethod
-    def _parse_number(string):
+    def _parse_number(string: str):
         return float(parse_decimal(string, locale="en_US", strict=True))
+
+    @staticmethod
+    def _wrong_header(header: str):
+        raise ValueError(
+            "Input CSV is not in the expected format. Either this script needs adaptation or "
+            f"a wrong type of CSV was downloaded. {header.title()} header is incorrect"
+        )
 
     def _process_trades(self):
         raise NotImplementedError()
@@ -140,6 +146,8 @@ class CSVConverter:
 class IbkrConverter(CSVConverter):
     def __init__(self, args):
         super().__init__(args)
+
+        self._skip_dividend_section = False
 
     def _process_trades(self):
         if self.row[0] != "Trades" or self.row[3] == "Forex":
@@ -175,10 +183,7 @@ class IbkrConverter(CSVConverter):
             ]
 
             if self.row != expected_headers:
-                raise ValueError(
-                    "IBKR CSV is not in the expected format. Either this script needs adaption or "
-                    "a wrong type of CSV was downloaded. Trade header is incorrect"
-                )
+                self._wrong_header("trade")
 
             return True
 
@@ -229,10 +234,7 @@ class IbkrConverter(CSVConverter):
             ]
 
             if self.row != expected_headers:
-                raise ValueError(
-                    "IBKR CSV is not in the expected format. Either this script needs adaption or "
-                    "a wrong type of CSV was downloaded. Forex header is incorrect"
-                )
+                self._wrong_header("forex")
 
             return True
 
@@ -279,24 +281,21 @@ class IbkrConverter(CSVConverter):
             ]
             if self.row == wrong_headers:
                 # There are two "Dividends" sections in the CSV file, duplicating the same information. Skip the first
-                self.skip_dividend_section = True
+                self._skip_dividend_section = True
 
                 return True
 
             expected_headers += ["Code"]
             if not self.row == expected_headers:
-                raise ValueError(
-                    "IBKR CSV is not in the expected format. Either this script needs adaption or "
-                    "a wrong type of CSV was downloaded. Dividends header is incorrect"
-                )
+                self._wrong_header("Dividends")
 
-            self.skip_dividend_section = False
+            self._skip_dividend_section = False
             return True
 
         return False
 
     def _process_dividend_row(self):
-        if self.skip_dividend_section or self.row[2] == "Total":
+        if self._skip_dividend_section or self.row[2] == "Total":
             return False
 
         symbol = self.row[4].split(" ")[0]
@@ -342,11 +341,8 @@ class IbkrConverter(CSVConverter):
             expected_headers[1].insert(-1, "Type")
 
             if self.row not in expected_headers:
-                raise ValueError(
-                    "IBKR CSV is not in the expected format. Either this script needs adaption or "
-                    "a wrong type of CSV was downloaded. Financial instrument information header "
-                    "is incorrect"
-                )
+                self._wrong_header("Financial Instrument Information")
+
             return True
 
         return False
