@@ -48,17 +48,28 @@ Parameters:
 
 ```
 positional arguments:
-  {ibkr,schwab}         Used broker
+  {degiro,ibkr,schwab}  Used broker
 
 options:
   -h, --help            show this help message and exit
   -i INPUT_FILENAME, --input INPUT_FILENAME
-                        Input file (CSV file from Interactive Brokers or JSON from Schwab)
+                        Input file (CSV file from DEGIRO and Interactive Brokers or JSON from Schwab)
   -o XLSX_FILENAME, --output XLSX_FILENAME
                         Output XLSX file
+  --degiro-account-csv DEGIRO_ACCOUNT_CSV
+                        Account.csv input file (only required for DEGIRO)
   --ibkr-ticker-to-isin, --no-ibkr-ticker-to-isin
                         Replace tickers in the 'symbol' column to ISIN (only for IBKR)
 ```
+
+## DEGIRO
+
+Export two CSV files from the German version of DEGIRO. Other localisations are not supported currently.
+
+1. Inbox > Transactions > Select the desired timeframe > Export > CSV
+2. Inbox > Account statement > Select the desired timeframe > Export > CSV
+
+Give the first CSV as `--input`, the second CSV as `--degiro-account-csv` to the converter script.
 
 ## Interactive Brokers
 
