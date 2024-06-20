@@ -111,7 +111,9 @@ Note the following limitations:
 Since all the reporting is done in a very simple and quite naive Python implementation, one could easily use it to augment the data in other ways. `notebook_example.ipynb` for instance shows you how to retrieve certain results as `pd.DataFrame`.
 
 # Requirements
-- pandas
+- python >= 3.9
+- babel
+- openpyxl
 - XlsxWriter
 
 # Testing
