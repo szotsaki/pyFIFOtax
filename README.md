@@ -56,7 +56,7 @@ options:
                         Input file (CSV file from Interactive Brokers or JSON from Schwab)
   -o XLSX_FILENAME, --output XLSX_FILENAME
                         Output XLSX file
-  --ticker-to-isin, --no-ticker-to-isin
+  --ibkr-ticker-to-isin, --no-ibkr-ticker-to-isin
                         Replace tickers in the 'symbol' column to ISIN (only for IBKR)
 ```
 
@@ -76,7 +76,7 @@ Export the CSV file by running this newly created custom statement in the desire
 
 Always thoroughly examine the result.
 
-By default, the "symbol" column contains the ticker name. If you'd like to see the ISIN there instead, use the `--ticker-to-isin` flag.
+By default, the "symbol" column contains the ticker name. If you'd like to see the ISIN there instead, use the `--ibkr-ticker-to-isin` flag.
 
 Note the following limitations:
 
