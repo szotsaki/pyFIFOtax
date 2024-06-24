@@ -16,8 +16,8 @@ class CSVConverter:
             columns=[
                 "date",
                 "symbol",
-                "net_quantity",
-                "fmv_or_buy_price",
+                "quantity",
+                "buy_price",
                 "fees",
                 "currency",
                 "Product",
@@ -44,8 +44,31 @@ class CSVConverter:
                 "Product",
             ]
         )
-        self.df_forex_to_eur = pd.DataFrame(
-            columns=["date", "net_amount", "fees", "currency"]
+        self.df_forex = pd.DataFrame(
+            columns=["date", "foreign_amount", "source_fees", "source_currency", "target_currency"]
+        )
+        self.df_rsu = pd.DataFrame(
+            columns=[
+                "date",
+                "symbol",
+                "amount",
+                "gross_quantity",
+                "net_quantity",
+                "fair_market_value",
+                "currency",
+                "Product",
+            ]
+        )
+        self.df_espp = pd.DataFrame(
+            columns=[
+                "date",
+                "symbol",
+                "buy_price",
+                "fair_market_value",
+                "quantity",
+                "currency",
+                "Product",
+            ]
         )
 
         self.row = ""
@@ -69,7 +92,9 @@ class CSVConverter:
                 self.df_deposits,
                 self.df_sales,
                 self.df_dividends,
-                self.df_forex_to_eur,
+                self.df_forex,
+                self.df_rsu,
+                self.df_espp,
             ]:
                 df.sort_values("date", inplace=True)
 
@@ -80,12 +105,12 @@ class CSVConverter:
 
     def write_to_xlsx(self):
         with pd.ExcelWriter(self._xlsx_filename, engine="xlsxwriter") as writer:
-            self._write_sheet("deposits", self.df_deposits, writer)
+            self._write_sheet("buy_orders", self.df_deposits, writer)
             self._write_sheet("dividends", self.df_dividends, writer)
-            self._write_sheet("sales", self.df_sales, writer)
-            self._write_sheet(
-                "currency conversion to EUR", self.df_forex_to_eur, writer
-            )
+            self._write_sheet("sell_orders", self.df_sales, writer)
+            self._write_sheet("currency_conversions", self.df_forex, writer)
+            self._write_sheet("rsu", self.df_rsu, writer)
+            self._write_sheet("espp", self.df_espp, writer)
 
         print(f"Results were written to '{os.path.basename(self._xlsx_filename)}'")
 
@@ -219,13 +244,14 @@ class IbkrConverter(CSVConverter):
         ):  # pyFIFOtax spreadsheet supports only conversion into EUR
             return False
 
-        self.df_forex_to_eur.loc[len(self.df_forex_to_eur.index)] = [
+        self.df_forex.loc[len(self.df_forex.index)] = [
             date.fromisoformat(self.row[6].split(",")[0]),  # Date
             abs(self._parse_number(self.row[11])),  # Proceeds
             abs(
                 self._parse_number(self.row[12]) * self._parse_number(self.row[9])
             ),  # Comm in EUR * T. Price
-            self.row[4],  # Symbol
+            self.row[5].replace(self.row[4], "").replace(".", ""),  # Symbol
+            self.row[4],  # Currency
         ]
 
         return True
